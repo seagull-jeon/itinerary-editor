@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>셉셉투어 2025 - FUKUOKA</title>
+    <!-- 載入 Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- 載入 Babel to compile JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 載入 Lucide Icons (使用 SVG 圖標) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- 載入 Firebase CDN -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, collection, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        
+        // 為了讓 React 程式碼能夠使用，我們將這些 Firebase 函式掛載到 window 上
+        window.firebaseDependencies = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            getFirestore,
+            doc,
+            collection,
+            setDoc,
+            onSnapshot,
+            serverTimestamp
+        };
+    </script>
+
+    <style>
+        /* 確保字體清晰易讀 */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* 隱藏內容編輯器焦點時可能出現的邊框，讓自訂樣式更乾淨 */
+        [contenteditable]:focus {
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div id="root">
+        <!-- 載入中的提示 -->
+        <div class="flex items-center justify-center min-h-screen text-gray-600">
+            <svg class="animate-spin h-5 w-5 mr-3 text-indigo-500" viewBox="0 0 24 24">...</svg>
+            載入應用程式中...
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // --- 1. Canvas 全局變數定義 ---
+        // 確保 React 程式碼能夠存取 Canvas 環境提供的變數
+        const __app_id = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const __firebase_config = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+        const __initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    </script>
+    
+    <script type="text/babel">
+        // 確保在運行 React 之前，Firebase 的依賴項已經加載
+        const {
+            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+            getFirestore, doc, collection, setDoc, onSnapshot, serverTimestamp
+        } = window.firebaseDependencies || {};
+
+        if (!window.firebaseDependencies) {
+            console.error("Firebase dependencies not loaded. Please wait for the initial script block to finish.");
+            // 提示用戶或提供替代方案
+        }
+
+        const { useState, useEffect, useCallback, useRef } = React;
+        const { MapPin, Loader, Zap, AlertTriangle, Calendar, Edit } = lucide;
+
+        // --- 全局變數和配置解析 (由 Canvas 環境自動提供) ---
+        const ITINERARY_DOC_ID = 'fukuoka-trip-2025';
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyDwcvSpNqLTwQxXlsVFS0gHX7kgYsL7hCw",
+            authDomain: "svt-tour.firebaseapp.com",
+            projectId: "svt-tour",
+            storageBucket: "svt-tour.firebasestorage.app",
+            messagingSenderId: "459552205214",
+            appId: "1:459552205214:web:aa7ae5400c309aa29bce8f"
+        };
+
+        const isFirebaseConfigured = !!firebaseConfig.apiKey;
+
+        // 原始行程數據 (從圖片中提取)
+        const initialItinerary = [
+            { day: '12/20 Fri.', schedules: [
+                { time: '06:45 - 10:00', activity: '航站: TPE → FUK 桃園/福岡機場', location: '桃園機場, 福岡機場', mapQuery: 'Fukuoka Airport' },
+                { time: '12:00 - 13:30', activity: '午餐: 博多拉麵 博多站周邊', location: '博多站', mapQuery: 'Hakata Station' },
+                { time: '13:30 - 14:30', activity: '咖啡: REC COFFEE HAKATA', location: 'REC COFFEE HAKATA', mapQuery: 'REC COFFEE HAKATA' },
+                { time: '18:00 - 21:30', activity: 'SEVENTEEN 演唱會 (Day 1) Pay Pay Dome', location: 'Pay Pay Dome', mapQuery: 'PayPay Dome' },
+                { time: '21:30 - 23:00', activity: '夜景: 聖誕市集 JR 博多站前廣場', location: 'JR 博多站前廣場', mapQuery: 'JR Hakata Station Square Christmas Market' },
+            ]},
+            { day: '12/21 Sat.', schedules: [
+                { time: '10:00 - 11:00', activity: '景點: 福岡塔觀光 福岡塔', location: '福岡塔', mapQuery: 'Fukuoka Tower' },
+                { time: '11:00 - 13:00', activity: 'SEVENTEEN POP-UP STORE 天神/博多地區', location: '天神/博多', mapQuery: 'Tenjin' },
+                { time: '13:00 - 14:00', activity: '午餐: 天神地下街美食 天神地下街', location: '天神地下街', mapQuery: 'Tenjin Chikagai' },
+                { time: '18:00 - 21:30', activity: 'SEVENTEEN 演唱會 (Day 2) Pay Pay Dome', location: 'Pay Pay Dome', mapQuery: 'PayPay Dome' },
+            ]},
+            { day: '12/22 Mon.', schedules: [
+                { time: '09:30 - 10:30', activity: '探訪: 明太子麵包 Full Full 天神店', location: 'Full Full 天神店', mapQuery: 'Full Full Tenjin' },
+                { time: '10:30 - 11:30', activity: '咖啡豆探購 Manu Coffee Daimyo', location: 'Manu Coffee Daimyo', mapQuery: 'Manu Coffee Daimyo' },
+                { time: '11:30 - 13:30', activity: '文化漫步 櫛田神社 & 博多町家故鄉館', location: '櫛田神社 & 博多町家故鄉館', mapQuery: 'Kushida Shrine and Hakata Machiya Folk Museum' },
+                { time: '15:00 - 16:00', activity: '咖啡: FUGLEN FUKUOKA', location: 'FUGLEN FUKUOKA', mapQuery: 'FUGLEN FUKUOKA' },
+                { time: '16:00 - 17:00', activity: '茶粉採購 博多阪急百貨 (B1)', location: '博多阪急', mapQuery: 'Hakata Hankyu' },
+                { time: '17:00 - 18:30', activity: '景點: 歷史漫步 福岡城跡/舞鶴公園', location: '福岡城跡/舞鶴公園', mapQuery: 'Fukuoka Castle Ruins' },
+                { time: '18:30 - 21:00', activity: '晚餐 ~ SORA ~ 大濠公園日本庭園', location: '大濠公園日本庭園', mapQuery: 'Ohori Park Japanese Garden' },
+            ]},
+            { day: '12/23 Tues.', schedules: [
+                { time: '09:00 - 10:30', activity: '早餐/咖啡 Stereo Coffee', location: 'Stereo Coffee', mapQuery: 'Stereo Coffee' },
+                { time: '10:30 - 12:30', activity: '購物: 雜貨與選品 藥院/今泉區域', location: '藥院/今泉', mapQuery: 'Yakuin Imaizumi' },
+                { time: '12:30 - 14:00', activity: '午餐: 在地美食 炸牛排/漢堡排餐廳', location: '餐廳地點', mapQuery: 'Fukuoka Steakhouse' },
+                { time: '14:00 - 17:00', activity: '最終伴手禮採購 JR 博多城/HAKATA DEITOS', location: 'JR 博多城/HAKATA DEITOS', mapQuery: 'JR Hakata City' },
+                { time: '20:55 - 22:35', activity: '航班: FUK → TPE 福岡機場/桃園機場', location: '福岡機場/桃園機場', mapQuery: 'Fukuoka Airport' },
+            ]},
+        ];
+
+        // --- 輔助函數 ---
+        const createMapLink = (query) => {
+            return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+        };
+
+        const useDebounce = (callback, delay) => {
+            const timeoutRef = useRef();
+            return useCallback((...args) => {
+                if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                }
+                timeoutRef.current = setTimeout(() => {
+                    callback(...args);
+                }, delay);
+            }, [callback, delay]);
+        };
+
+
+        const App = () => {
+            const [db, setDb] = useState(null);
+            const [userId, setUserId] = useState(null);
+            const [itinerary, setItinerary] = useState(initialItinerary);
+            const [connectionStatus, setConnectionStatus] = useState('初始化中...');
+            const [isDataLoading, setIsDataLoading] = useState(true);
+
+            // --- Firestore 寫入函數 (防抖動) ---
+            const saveItineraryToFirestore = useCallback(async (currentItinerary) => {
+                if (!db || !userId) {
+                    return;
+                }
+                setConnectionStatus('儲存中...');
+                
+                try {
+                    // 公共數據路徑：/artifacts/{appId}/public/data/itineraries
+                    const docRef = doc(db, `artifacts/${appId}/public/data/itineraries`, ITINERARY_DOC_ID);
+                    await setDoc(docRef, {
+                        itineraryData: JSON.stringify(currentItinerary), // 必須將複雜陣列結構序列化
+                        updatedAt: serverTimestamp(),
+                        updatedBy: userId,
+                    });
+                    setConnectionStatus('已連線並自動儲存！');
+                } catch (error) {
+                    console.error("Error saving document: ", error);
+                    setConnectionStatus(`儲存錯誤: ${error.message}`);
+                }
+            }, [db, userId]);
+
+            const debouncedSave = useDebounce(saveItineraryToFirestore, 1000);
+
+            // 處理編輯事件
+            const handleEdit = (dayIndex, scheduleIndex, newText) => {
+                const newItinerary = [...itinerary];
+                newItinerary[dayIndex].schedules[scheduleIndex].activity = newText;
+                setItinerary(newItinerary);
+                debouncedSave(newItinerary);
+            };
+
+            // --- 1. Firebase 初始化與認證 ---
+            useEffect(() => {
+                if (!isFirebaseConfigured || !initializeApp || !getAuth) {
+                    setConnectionStatus('未連線: Firebase 依賴項未完全加載。資料無法持久化。');
+                    setIsDataLoading(false);
+                    return;
+                }
+
+                try {
+                    const firebaseApp = initializeApp(firebaseConfig);
+                    const firestore = getFirestore(firebaseApp);
+                    const firebaseAuth = getAuth(firebaseApp);
+
+                    setDb(firestore);
+
+                    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+                        if (user) {
+                            setUserId(user.uid);
+                        } else {
+                            try {
+                                if (initialAuthToken) {
+                                    await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                                } else {
+                                    await signInAnonymously(firebaseAuth);
+                                }
+                            } catch (error) {
+                                console.error("Firebase Auth Error:", error);
+                                setConnectionStatus(`認證失敗: ${error.code}`);
+                            }
+                        }
+                    });
+
+                    return () => unsubscribe(); 
+
+                } catch (e) {
+                    console.error("Firebase Initialization Error:", e);
+                    setConnectionStatus(`初始化錯誤: ${e.message}`);
+                }
+            }, []);
+
+            // --- 2. Firestore 資料同步 (讀取) ---
+            useEffect(() => {
+                if (!db || !userId) {
+                    return;
+                }
+
+                const docRef = doc(db, `artifacts/${appId}/public/data/itineraries`, ITINERARY_DOC_ID);
+
+                const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        try {
+                            const data = docSnap.data();
+                            const savedItinerary = JSON.parse(data.itineraryData);
+                            setItinerary(savedItinerary);
+                            setConnectionStatus('已連線並載入最新行程。');
+                        } catch (e) {
+                            console.error("Failed to parse saved itinerary data:", e);
+                            setConnectionStatus('連線成功，但載入數據錯誤，使用預設行程。');
+                        }
+                    } else {
+                        saveItineraryToFirestore(initialItinerary);
+                        setConnectionStatus('已連線，初始化行程數據。');
+                    }
+                    setIsDataLoading(false);
+                }, (error) => {
+                    console.error("Firestore Snapshot Error:", error);
+                    setConnectionStatus(`載入錯誤: ${error.message}`);
+                    setIsDataLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [db, userId, saveItineraryToFirestore]);
+
+            // --- UI 組件 ---
+            const ScheduleItem = ({ dayIndex, scheduleIndex, schedule }) => {
+                const { time, activity, mapQuery } = schedule;
+
+                // Lucide icons are now globally available via the `lucide` object
+                const MapPinIcon = MapPin; 
+                const EditIcon = Edit;
+
+                return (
+                    <div className="flex space-x-4 border-l-2 border-indigo-300 pl-4 py-3 hover:bg-indigo-50/50 transition duration-100">
+                        {/* 時間 */}
+                        <div className="w-24 flex-shrink-0 font-mono text-sm text-indigo-600 font-semibold pt-1">
+                            {time}
+                        </div>
+                        
+                        {/* 活動內容 (可編輯) */}
+                        <div className="flex-grow min-w-0">
+                            <div
+                                contentEditable={!!userId} // 只有在登入後才允許編輯
+                                suppressContentEditableWarning={true}
+                                className={`text-gray-800 font-medium leading-relaxed outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white rounded-md p-1 -m-1 transition-colors duration-150 ${!userId && 'cursor-not-allowed opacity-80'}`}
+                                onBlur={(e) => handleEdit(dayIndex, scheduleIndex, e.target.innerText)}
+                            >
+                                {activity}
+                            </div>
+                            
+                            {/* 地點連結 */}
+                            {mapQuery && (
+                                <a 
+                                    href={createMapLink(mapQuery)} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="mt-1 inline-flex items-center text-xs text-indigo-500 hover:text-indigo-700 font-semibold transition duration-150"
+                                >
+                                    <MapPinIcon className="w-3 h-3 mr-1" /> {schedule.location}
+                                </a>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            const DayCard = ({ dayData, dayIndex }) => {
+                const CalendarIcon = Calendar;
+                return (
+                    <div className="bg-white rounded-xl shadow-lg p-5 flex flex-col h-full">
+                        <div className="flex items-center space-x-3 mb-4 pb-3 border-b border-indigo-200">
+                            <CalendarIcon className="w-6 h-6 text-indigo-600" />
+                            <h2 className="text-2xl font-extrabold text-gray-800">{dayData.day}</h2>
+                        </div>
+                        
+                        <div className="space-y-4 flex-grow">
+                            {dayData.schedules.map((schedule, scheduleIndex) => (
+                                <ScheduleItem 
+                                    key={scheduleIndex} 
+                                    dayIndex={dayIndex}
+                                    scheduleIndex={scheduleIndex} 
+                                    schedule={schedule} 
+                                />
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- 主渲染 ---
+            const isError = connectionStatus.includes('錯誤') || connectionStatus.includes('失敗') || connectionStatus.includes('無效');
+            const LoaderIcon = Loader;
+            const AlertTriangleIcon = AlertTriangle;
+            const ZapIcon = Zap;
+            const EditIcon = Edit;
+
+            return (
+                <div className="min-h-screen bg-gray-50 p-4 sm:p-8 font-sans">
+                
+                {/* 頂部標題和狀態 */}
+                <header className="mb-8 max-w-6xl mx-auto">
+                    <h1 className="text-4xl font-black text-gray-900 mb-2 border-b-4 border-indigo-500 inline-block pb-1">
+                        셉셉투어 2025 - FUKUOKA
+                    </h1>
+                    
+                    {/* 連線狀態指示 */}
+                    <div className={`text-sm font-medium p-2 rounded-lg flex items-center space-x-2 ${
+                        isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                    }`}>
+                        {isDataLoading ? (
+                            <LoaderIcon className="w-4 h-4 animate-spin" />
+                        ) : isError ? (
+                            <AlertTriangleIcon className="w-4 h-4" />
+                        ) : (
+                            <ZapIcon className="w-4 h-4" />
+                        )}
+                        <span>{connectionStatus}</span>
+                        {!isError && userId && <span className="text-xs text-gray-500 italic ml-2">(編輯內容將自動儲存)</span>}
+                    </div>
+                </header>
+                
+                {/* 行程卡片列表 (響應式網格) */}
+                <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+                    {itinerary.map((dayData, index) => (
+                        <DayCard key={index} dayData={dayData} dayIndex={index} />
+                    ))}
+                </main>
+
+                {/* 編輯提示 */}
+                <footer className="mt-8 pt-4 text-center text-gray-500 text-sm border-t max-w-6xl mx-auto">
+                    <p className="flex items-center justify-center">
+                        <EditIcon className="w-4 h-4 mr-2" /> 
+                        點擊行程內容即可編輯和自訂您的旅遊計畫！
+                    </p>
+                </footer>
+                </div>
+            );
+        };
+
+        // 啟動 React 應用程式
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
