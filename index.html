@@ -1,470 +1,67 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>셉셉투어 2025 - FUKUOKA</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        window.FirebaseServices = { 
-            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
-            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, 
-            collection, query, where, getDocs 
-        };
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>셉셉투어 2025 - FUKUOKA</title>
+    <!-- Keep Tailwind CDN for simplicity without needing PostCSS config -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Noto Sans TC', 'sans-serif'],
+            },
+            colors: {
+              svt: {
+                rose: '#F7CAC9',
+                serenity: '#92A8D1',
+                dark: '#2c3e50'
+              }
+            }
+          }
+        }
+      }
     </script>
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f0f0f0; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+      body {
+        background-color: #f8fafc;
+      }
+      /* Custom scrollbar for better aesthetics */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
     </style>
-</head>
-<body>
-
-<div id="root"></div>
-
-<script type="text/babel">
-    const { useState, useEffect, useCallback, useMemo } = React;
-    const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query } = window.FirebaseServices || {};
-
-    const FIREBASE_CONFIG = {
-        apiKey: "AIzaSyDwcvSpNqLTwQxXlsVFS0gHX7kgYsL7hCw",
-        authDomain: "svt-tour.firebaseapp.com",
-        projectId: "svt-tour",
-        storageBucket: "svt-tour.firebasestorage.app",
-        messagingSenderId: "459552205214",
-        appId: "1:459552205214:web:aa7ae5400c309aa29bce8f"
-    };
-
-    const isFirebaseConfigured = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "AIzaSyDwcvSpNqLTwQxXlsVFS0gHX7kgYsL7hCw";
-    const APP_ID = FIREBASE_CONFIG.projectId || 'svt-tour';
-
-    // ===============================================
-    // 2. SVG 圖標定義 (JSX Fragment checked, trimmed to single line)
-    // ===============================================
-    const ICONS = {
-        Plus: <path d="M12 5v14M5 12h14"/>,
-        Edit: <path d="M12 20h9M16.5 3.5l4 4L7.5 19.5 3 21l1.5-4.5z"/>,
-        Trash2: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6M1 3v2h22V3"/>,
-        Calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
-        Clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
-        MapPin: <path d="M12 12h.01M12 21h.01M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 17.25V21"/>,
-        Tag: <path d="M12 20H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8l-7 7-3 3-1-1zM18 6h.01"/>,
-        Save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>,
-        X: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
-        Loader2: <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-    };
-
-    const Icon = ({ name, className = 'w-5 h-5', onClick }) => {
-        const svgContent = ICONS[name];
-        if (!svgContent) return null;
-        return (
-            <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className={className}
-                onClick={onClick}
-            >
-                {svgContent}
-            </svg>
-        );
-    };
-
-    const getCollectionPath = (userId) => {
-        return `artifacts/${APP_ID}/users/${userId}/itineraries`;
-    };
-
-    // ===============================================
-    // 3. 主要 App 組件
-    // ===============================================
-    const App = () => {
-        const [db, setDb] = useState(null);
-        const [userId, setUserId] = useState(null);
-        const [isAuthReady, setIsAuthReady] = useState(false);
-        const [isLoading, setIsLoading] = useState(true);
-        const [error, setError] = useState(null);
-
-        const [itineraries, setItineraries] = useState([]);
-        const [newItineraryName, setNewItineraryName] = useState('');
-        const [selectedItinerary, setSelectedItinerary] = useState(null);
-        const [isAddingDay, setIsAddingDay] = useState(false);
-        const [newDayDetails, setNewDayDetails] = useState({ date: '', location: '', activity: '' });
-        const [isEditingDay, setIsEditingDay] = useState(null);
-        
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // 1. Firebase Initialization and Authentication
-        useEffect(() => {
-            if (!isFirebaseConfigured) {
-                setError("Firebase 配置無效。目前為演示模式，無法儲存資料。");
-                setDb(null); 
-                setUserId('demo-user');
-                setIsAuthReady(true);
-                setIsLoading(false);
-                return;
-            }
-            
-            try {
-                const app = initializeApp(FIREBASE_CONFIG);
-                const firestore = getFirestore(app);
-                const authInstance = getAuth(app);
-                setDb(firestore);
-
-                const unsubscribeAuth = onAuthStateChanged(authInstance, async (user) => {
-                    try {
-                        if (user) {
-                            setUserId(user.uid);
-                        } else {
-                            if (initialAuthToken) {
-                                await signInWithCustomToken(authInstance, initialAuthToken);
-                            } else {
-                                await signInAnonymously(authInstance);
-                            }
-                            if(authInstance.currentUser) {
-                                setUserId(authInstance.currentUser.uid);
-                            } else {
-                                setUserId(crypto.randomUUID()); 
-                                setError("匿名登入失敗。資料將不會持久儲存。");
-                            }
-                        }
-                    } catch (authError) {
-                        console.error("Firebase Auth Error:", authError);
-                        setError(`認證失敗，請檢查 Auth 服務: ${authError.message}`);
-                        setUserId(crypto.randomUUID());
-                    } finally {
-                        setIsAuthReady(true);
-                        setIsLoading(false); 
-                    }
-                });
-                return () => unsubscribeAuth();
-            } catch (e) {
-                console.error("Error initializing Firebase:", e);
-                setError(`Firebase 初始化失敗，請檢查配置: ${e.message}`);
-                setIsAuthReady(true);
-                setIsLoading(false);
-            }
-        }, [isFirebaseConfigured]); 
-
-        // 2. 資料庫監聽器
-        useEffect(() => {
-            if (!isAuthReady || !db || !userId) return;
-
-            const path = getCollectionPath(userId);
-            const q = query(collection(db, path)); 
-            
-            const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-                const loadedItineraries = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    days: doc.data().days || [],
-                }));
-                setItineraries(loadedItineraries);
-            }, (err) => {
-                console.error("Firestore Snapshot Error:", err);
-                setError(`資料庫連線失敗：請檢查 Firestore 安全規則: ${err.message}`);
-            });
-
-            return () => unsubscribeSnapshot();
-        }, [isAuthReady, db, userId]); 
-
-        // 3. CRUD 操作 (C: Create)
-        const handleCreateItinerary = useCallback(async () => {
-            if (!newItineraryName.trim() || !db || !userId) return;
-
-            const newItinerary = {
-                name: newItineraryName.trim(),
-                createdAt: new Date(),
-                days: [],
-            };
-
-            if (!isFirebaseConfigured) {
-                setItineraries(prev => [...prev, { id: crypto.randomUUID(), ...newItinerary }]);
-                setSelectedItinerary({ id: crypto.randomUUID(), ...newItinerary });
-            } else {
-                try {
-                    const docRef = await addDoc(collection(db, getCollectionPath(userId)), newItinerary);
-                    setSelectedItinerary({ id: docRef.id, ...newItinerary });
-                } catch (e) {
-                    console.error("Error adding document: ", e);
-                    setError(`新增行程失敗: ${e.message}`);
-                }
-            }
-            setNewItineraryName('');
-        }, [newItineraryName, db, userId, isFirebaseConfigured]);
-
-        // 4. CRUD 操作 (U: Update Day)
-        const handleUpdateDay = useCallback(async (itineraryId, dayIndex, updatedDetails) => {
-            const itineraryToUpdate = itineraries.find(i => i.id === itineraryId);
-            if (!itineraryToUpdate) return;
-            
-            let newDays;
-            if (Array.isArray(updatedDetails)) { // 處理刪除操作傳入的整個新陣列
-                newDays = updatedDetails;
-            } else { // 處理編輯單一日的細節
-                newDays = [...itineraryToUpdate.days];
-                newDays[dayIndex] = JSON.parse(JSON.stringify(updatedDetails));
-            }
-            
-            if (!isFirebaseConfigured) {
-                setItineraries(prev => prev.map(i => i.id === itineraryId ? { ...i, days: newDays } : i));
-                setSelectedItinerary(prev => ({ ...prev, days: newDays }));
-            } else {
-                try {
-                    await updateDoc(doc(db, getCollectionPath(userId), itineraryId), { days: newDays });
-                } catch (e) {
-                    console.error("Error updating day: ", e);
-                    setError(`更新行程日失敗: ${e.message}`);
-                }
-            }
-            setIsEditingDay(null);
-        }, [itineraries, db, userId, isFirebaseConfigured]);
-
-        // 5. CRUD 操作 (D: Delete Itinerary)
-        const handleDeleteItinerary = useCallback(async (id) => {
-            if (!isFirebaseConfigured) {
-                setItineraries(prev => prev.filter(i => i.id !== id));
-            } else {
-                try {
-                    await deleteDoc(doc(db, getCollectionPath(userId), id));
-                } catch (e) {
-                    console.error("Error deleting itinerary: ", e);
-                    setError(`刪除行程失敗: ${e.message}`);
-                }
-            }
-            if (selectedItinerary && selectedItinerary.id === id) {
-                setSelectedItinerary(null);
-            }
-        }, [db, userId, selectedItinerary, isFirebaseConfigured]);
-
-        // 6. CRUD 操作 (C: Add Day)
-        const handleAddDay = useCallback(async () => {
-            if (!selectedItinerary || !newDayDetails.date || !db) return;
-
-            const newDays = [...selectedItinerary.days, JSON.parse(JSON.stringify(newDayDetails))];
-            
-            if (!isFirebaseConfigured) {
-                setSelectedItinerary(prev => ({ ...prev, days: newDays }));
-            } else {
-                try {
-                    await updateDoc(doc(db, getCollectionPath(userId), selectedItinerary.id), { days: newDays });
-                } catch (e) {
-                    console.error("Error adding day: ", e);
-                    setError(`新增行程日失敗: ${e.message}`);
-                }
-            }
-            setIsAddingDay(false);
-            setNewDayDetails({ date: '', location: '', activity: '' });
-        }, [selectedItinerary, newDayDetails, db, userId, isFirebaseConfigured]);
-
-
-        if (isLoading) {
-            return (
-                <div className="flex items-center justify-center min-h-screen bg-gray-100">
-                    <div className="flex flex-col items-center p-6 bg-white rounded-lg shadow-xl">
-                        <Icon name="Loader2" className="w-10 h-10 text-indigo-600 animate-spin" />
-                        <p className="mt-4 text-lg font-semibold text-gray-700">正在初始化應用程式...</p>
-                        <p className="text-sm text-gray-500 mt-1">請確認您的 Firebase 配置和安全規則。</p>
-                    </div>
-                </div>
-            );
-        }
-
-        return (
-            <div className="min-h-screen flex flex-col md:flex-row bg-gray-50">
-                
-                {error && (
-                    <div className="fixed top-0 left-0 right-0 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 z-50 shadow-md">
-                        <p className="font-bold">發生錯誤/警告:</p>
-                        <p className="text-sm">{error}</p>
-                    </div>
-                )}
-                
-                {/* 側邊欄：行程列表 */}
-                <div className="w-full md:w-1/3 lg:w-1/4 bg-white border-r border-gray-200 p-6 flex flex-col shadow-lg">
-                    <h1 className="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">我的行程</h1>
-                    
-                    <div className="mb-6 space-y-3">
-                        <input
-                            type="text"
-                            placeholder="輸入新的行程名稱..."
-                            value={newItineraryName}
-                            onChange={(e) => setNewItineraryName(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                        <button
-                            onClick={handleCreateItinerary}
-                            className="w-full flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-150 shadow-md hover:shadow-lg"
-                        >
-                            <Icon name="Plus" className="w-5 h-5 mr-2" />
-                            新增行程
-                        </button>
-                    </div>
-
-                    <div className="flex-grow custom-scrollbar overflow-y-auto space-y-2 pr-2">
-                        {itineraries.map((itinerary) => (
-                            <div
-                                key={itinerary.id}
-                                onClick={() => setSelectedItinerary(itinerary)}
-                                className={`flex justify-between items-center p-3 rounded-lg cursor-pointer transition duration-150 ${
-                                    selectedItinerary && selectedItinerary.id === itinerary.id 
-                                        ? 'bg-indigo-100 border-l-4 border-indigo-600 shadow-md' 
-                                        : 'bg-gray-50 hover:bg-gray-100'
-                                }`}
-                            >
-                                <span className="font-medium text-gray-800 truncate pr-4">
-                                    {itinerary.name} 
-                                    <span className="text-xs text-gray-500 ml-2">({itinerary.days.length} 天)</span>
-                                </span>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteItinerary(itinerary.id); }}
-                                    className="p-1 text-red-500 hover:text-red-700 rounded-full transition duration-150 hover:bg-red-100"
-                                    title="刪除行程"
-                                >
-                                    <Icon name="Trash2" className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500 break-words">
-                        <p>用戶 ID: {userId || 'N/A'}</p>
-                        <p className="mt-1">
-                            狀態: 
-                            <span className={`font-semibold ml-1 ${isFirebaseConfigured ? 'text-green-600' : 'text-yellow-600'}`}>
-                                {isFirebaseConfigured ? '已連線' : '演示模式'}
-                            </span>
-                        </p>
-                    </div>
-                </div>
-
-                {/* 主內容區：行程詳情 */}
-                <div className="flex-grow p-6 md:p-10 custom-scrollbar overflow-y-auto">
-                    {selectedItinerary ? (
-                        <div className="bg-white p-6 md:p-8 rounded-xl shadow-2xl">
-                            <h2 className="text-4xl font-bold text-gray-900 mb-8 border-b pb-4">{selectedItinerary.name}</h2>
-                            
-                            {/* 日程列表 */}
-                            <div className="space-y-6">
-                                {selectedItinerary.days.map((day, index) => (
-                                    <div key={index} className="bg-gray-50 p-5 border border-gray-200 rounded-lg transition duration-200 hover:shadow-lg">
-                                        
-                                        {/* 編輯模式 */}
-                                        {isEditingDay === index ? (
-                                            <div className="space-y-3">
-                                                <input type="date" value={newDayDetails.date} onChange={(e) => setNewDayDetails(d => ({ ...d, date: e.target.value }))} className="w-full p-3 border border-gray-300 rounded-lg"/>
-                                                <input type="text" placeholder="地點 (e.g. 台北 101)" value={newDayDetails.location} onChange={(e) => setNewDayDetails(d => ({ ...d, location: e.target.value }))} className="w-full p-3 border border-gray-300 rounded-lg"/>
-                                                <textarea placeholder="活動細節 (e.g. 10:00 觀景台，13:00 午餐)" value={newDayDetails.activity} onChange={(e) => setNewDayDetails(d => ({ ...d, activity: e.target.value }))} className="w-full p-3 border border-gray-300 rounded-lg h-24 resize-none"></textarea>
-                                                <div className="flex space-x-3">
-                                                    <button onClick={() => handleUpdateDay(selectedItinerary.id, index, newDayDetails)} className="flex-1 flex items-center justify-center bg-green-500 hover:bg-green-600 text-white font-medium py-2 rounded-lg transition duration-150" disabled={!isFirebaseConfigured && !isFirebaseConfigured}>
-                                                        <Icon name="Save" className="w-4 h-4 mr-2" />儲存
-                                                    </button>
-                                                    <button onClick={() => setIsEditingDay(null)} className="flex-1 flex items-center justify-center bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 rounded-lg transition duration-150">
-                                                        <Icon name="X" className="w-4 h-4 mr-2" />取消
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            // 檢視模式
-                                            <div className="space-y-3">
-                                                <div className="flex justify-between items-start">
-                                                    <h3 className="flex items-center text-xl font-bold text-indigo-700">
-                                                        <Icon name="Calendar" className="w-5 h-5 mr-3 text-indigo-500" />
-                                                        {day.date || '未定日期'}
-                                                    </h3>
-                                                    <div className="flex space-x-2">
-                                                        <button 
-                                                            onClick={() => {
-                                                                setNewDayDetails({ date: day.date || '', location: day.location || '', activity: day.activity || '' });
-                                                                setIsEditingDay(index);
-                                                            }}
-                                                            className="p-2 text-blue-500 hover:text-blue-700 rounded-full hover:bg-blue-100"
-                                                            title="編輯"
-                                                        >
-                                                            <Icon name="Edit" className="w-4 h-4" />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => {
-                                                                const newDays = selectedItinerary.days.filter((_, i) => i !== index);
-                                                                handleUpdateDay(selectedItinerary.id, index, newDays);
-                                                            }}
-                                                            className="p-2 text-red-500 hover:text-red-700 rounded-full hover:bg-red-100"
-                                                            title="刪除"
-                                                        >
-                                                            <Icon name="Trash2" className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <p className="flex items-center text-gray-700 font-semibold mt-2">
-                                                    <Icon name="MapPin" className="w-4 h-4 mr-2 text-red-500" />
-                                                    地點: {day.location || 'N/A'}
-                                                </p>
-                                                <p className="flex items-start text-gray-600 whitespace-pre-wrap">
-                                                    <Icon name="Tag" className="w-4 h-4 mt-1 mr-2 text-green-500 flex-shrink-0" />
-                                                    活動: {day.activity || '無活動安排'}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* 新增行程日介面 */}
-                            <div className="mt-8 pt-6 border-t border-gray-200">
-                                {isAddingDay ? (
-                                    <div className="bg-white p-6 border-2 border-dashed border-indigo-300 rounded-xl shadow-inner space-y-4">
-                                        <h3 className="text-xl font-semibold text-gray-700">新增行程日</h3>
-                                        <input type="date" value={newDayDetails.date} onChange={(e) => setNewDayDetails(d => ({ ...d, date: e.target.value }))} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"/>
-                                        <input type="text" placeholder="地點 (e.g. 台北 101)" value={newDayDetails.location} onChange={(e) => setNewDayDetails(d => ({ ...d, location: e.target.value }))} className="w-full p-3 border border-gray-300 rounded-lg"/>
-                                        <textarea placeholder="活動細節 (e.g. 10:00 觀景台，13:00 午餐)" value={newDayDetails.activity} onChange={(e) => setNewDayDetails(d => ({ ...d, activity: e.target.value }))} className="w-full p-3 border border-gray-300 rounded-lg h-24 resize-none"></textarea>
-                                        <div className="flex space-x-4">
-                                            <button onClick={handleAddDay} className="flex-1 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition duration-150">
-                                                <Icon name="Save" className="w-5 h-5 mr-2" />確認新增
-                                            </button>
-                                            <button onClick={() => { setIsAddingDay(false); setNewDayDetails({ date: '', location: '', activity: '' }); }} className="flex-1 flex items-center justify-center bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg transition duration-150">
-                                                <Icon name="X" className="w-5 h-5 mr-2" />取消
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button
-                                        onClick={() => setIsAddingDay(true)}
-                                        className="w-full flex items-center justify-center bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-150 shadow-md hover:shadow-lg"
-                                    >
-                                        <Icon name="Plus" className="w-5 h-5 mr-2" />
-                                        新增行程日
-                                    </button>
-                                )}
-                            </div>
-
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-gray-500 p-10 bg-white rounded-xl shadow-lg">
-                            <Icon name="MapPin" className="w-16 h-16 mb-4 text-indigo-400" />
-                            <p className="text-xl font-medium">請在左側選擇一個行程，或建立一個新的行程來開始規劃。</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    ReactDOM.render(<App />, document.getElementById('root'));
-
+  <script type="importmap">
+{
+  "imports": {
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "@dnd-kit/utilities": "https://aistudiocdn.com/@dnd-kit/utilities@^3.2.2",
+    "@dnd-kit/sortable": "https://aistudiocdn.com/@dnd-kit/sortable@^10.0.0",
+    "@dnd-kit/core": "https://aistudiocdn.com/@dnd-kit/core@^6.3.1"
+  }
+}
 </script>
-
-</body>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
